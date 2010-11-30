@@ -1,0 +1,3 @@
+*.pyc
+*~
+/mock_isolation.egg-info
