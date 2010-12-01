@@ -1,4 +1,4 @@
-mock_isolation is a Python module that provides isolation of objects,
+eyam is a Python module that provides isolation of objects,
 functions and methods by mocking most of the contents in a module with
 Mock objects (from Michael Foord's Mock library). It removes the need
 to individually mock all objects which the method under test depends
@@ -8,15 +8,15 @@ library.
 
 mock is tested on Python version 2.6.
 
-* `mock_isolation on GitHub (repository and issue tracker) <http://github.com/akaihola/mock_isolation>`_
+* `eyam on GitHub (repository and issue tracker) <http://github.com/akaihola/eyam>`_
 
-mock_isolation is very easy to use and is designed for use with
+eyam is very easy to use and is designed for use with
 Michael Foord's Mock library.
 
 You can mock classes, instances, functions and methods. The syntax is
 straightforward:
 
-    >>> from mock_isolation import isolate
+    >>> from eyam import isolate
     >>> import tests.isolationfixture as mod
 
     >>> def dump(expr):

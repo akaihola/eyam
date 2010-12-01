@@ -1,10 +1,10 @@
-# mock_isolation.py
+# eyam.py
 # Test tools for isolation with mocks.
 # Copyright (C) 2010 Antti Kaihola
 # E-mail: akaihol PLUS python AT ambitone DOT com
 
-# mock_isolation 0.1
-# http://github.com/akaihola/mock_isolation
+# eyam 0.1
+# http://github.com/akaihola/eyam
 
 # Released subject to the BSD License
 # Please see http://www.voidspace.org.uk/python/license.shtml
@@ -18,56 +18,67 @@ from types import MethodType
 
 
 __all__ = 'isolate',
-
-
 __version__ = '0.1'
 
 
-class create_mock_class(Mock):
-    def __call__(self, *args, **kw):
-        instance = super(create_mock_class, self).__call__(*args, **kw)
-        for key, value in self.__dict__.iteritems():
-            if ismethod(value):
-                if value.im_self:  # bound class method
-                    setattr(instance, key, value)
-                else:  # unbound instance method
-                    setattr(instance, key,
-                            MethodType(value.im_func, instance, create_mock_class))
-        instance.__init__(*args, **kw)
-        return instance
+def _clone_class(cls, exclude):
+    clone_attrs = {}
+    local_exclude = set(ex[0] for ex in exclude if ex)
+    for key, value in cls.__dict__.iteritems():
+        if key == '__dict__':
+            continue
+        elif key in local_exclude:
+            clone_attrs[key] = value
+        else:
+            clone_attrs[key] = Mock()
+            if key == '__init__':
+                clone_attrs[key].return_value = None
+    clone = type(cls.__name__, cls.__bases__, clone_attrs)
+    return clone
 
 
-def _mock_module(module):
+def _copy_attribute(source_obj, path, target):
+    source = eval('obj.%s' % '.'.join(path), {'obj': source_obj})
+    for comp in path[:-1]:
+        target = getattr(target, comp)
+    if ismethod(source) and source.im_self is not None:
+        setattr(target, path[-1], MethodType(source.im_func, target, target))
+    elif ismethod(source) and source.im_self is None:
+        setattr(target, path[-1], source)
+    else:
+        setattr(target, path[-1], source)
+
+
+def _clone_object(old_obj, exclude):
+    obj = Mock()
+    for attpath in exclude:
+        _copy_attribute(old_obj, attpath, obj)
+    return obj
+
+
+def _clone(obj, exclude):
+    if isclass(obj) and exclude:
+        # If anything inside the class is to be excluded, clone the class and
+        # mock its attributes and methods.  Otherwise just replace the whole
+        # class with a mock object.
+        return _clone_class(obj, exclude)
+    return _clone_object(obj, exclude)
+
+
+def _mock_module(module, exclude):
     old_module_dict = module.__dict__.copy()
     module_keys = set(module.__dict__.iterkeys())
 
     dunders = set(k for k in module_keys
                   if k.startswith('__') and k.endswith('__'))
-    replaced_keys = module_keys - dunders
+    excl = set(x[0] for x in exclude if x and len(x) == 1)
+    replaced_keys = module_keys - dunders - excl
     for key in replaced_keys:
         old_value = old_module_dict[key]
-        if isclass(old_value):
-            module.__dict__[key] = create_mock_class()
-        else:
-            module.__dict__[key] = Mock()
+        local_exclude = set(x[1:] for x in exclude
+                            if x and x[0] == key and len(x) > 1)
+        module.__dict__[key] = _clone(old_value, local_exclude)
     module.__dict__['__mocked_module_dict__'] = old_module_dict
-
-
-def _copy_original_object(module, obj_path):
-    components = obj_path.split('.')
-    source = eval(obj_path, module.__dict__['__mocked_module_dict__'])
-    target = module
-    for index, comp in enumerate(components[:-1]):
-        target = getattr(target, comp)
-    if ismethod(source) and source.im_self is not None:
-        #setattr(target, components[-1], lambda *args, **kw: (
-        #    source.im_func(target, *args, **kw)))
-        setattr(target, components[-1], MethodType(source.im_func, target, target))
-        #setattr(target, components[-1], source)
-    elif ismethod(source) and source.im_self is None:
-        setattr(target, components[-1], source)
-    else:
-        setattr(target, components[-1], source)
 
 
 def _restore_module(module):
@@ -78,12 +89,12 @@ def _restore_module(module):
 
 class _isolate_module(object):
 
-    def __init__(self, module, exclude=None):
+    def __init__(self, module, *exclude):
         self.module = module
-        self.exclude = exclude or []
+        self.exclude = exclude
 
     def copy(self):
-        return _isolate_module(self.module, self.exclude)
+        return _isolate_module(self.module, *self.exclude)
 
     def __call__(self, func):
         if isinstance(func, class_types):
@@ -122,9 +133,7 @@ class _isolate_module(object):
         return patched
 
     def __enter__(self):
-        _mock_module(self.module)
-        for obj in self.exclude:
-            _copy_original_object(self.module, obj)
+        _mock_module(self.module, self.exclude)
         return self.module
 
     def __exit__(self, *_):
@@ -134,4 +143,5 @@ class _isolate_module(object):
 def isolate(module, *exclude):
     if isinstance(module, basestring):
         module = _importer(module)
-    return _isolate_module(module, exclude)
+    exclude_tuples = set(tuple(x.split('.')) for x in exclude)
+    return _isolate_module(module, *exclude_tuples)

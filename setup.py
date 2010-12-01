@@ -3,16 +3,16 @@
 # Copyright (C) 2010 Antti Kaihola
 # E-mail: akaihol PLUS python AT ambitone DOT com
 
-from mock_isolation import __version__
+from eyam import __version__
 
 import os
 
 
-NAME = 'mock_isolation'
-MODULES = ['mock_isolation']
+NAME = 'eyam'
+MODULES = ['eyam']
 DESCRIPTION = 'A Python Mocking Isolation Library for Testing'
 
-URL = "http://github.com/akaihola/mock_isolation/"
+URL = "http://github.com/akaihola/eyam/"
 
 readme = os.path.join(os.path.dirname(__file__), 'README.txt')
 LONG_DESCRIPTION = open(readme).read()

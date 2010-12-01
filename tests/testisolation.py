@@ -1,9 +1,7 @@
 from tests.support import unittest2
 import sys
 
-from mock_isolation import (
-    _copy_original_object,
-    isolate,)
+from eyam import isolate
 from mock import Mock
 
 import tests.isolationfixture
@@ -13,63 +11,11 @@ from tests.isolationfixture import (
     unmocked_instance as original_unmocked_instance)
 
 
-class CopyOriginalObjectTest(unittest2.TestCase):
-    def testCopyTopLevelVar(self):
-        class module:
-            top_level_var = Mock(name='mocked value')
-            another_var = Mock(name='another mocked value')
-            __mocked_module_dict__ = {'top_level_var': 'original value'}
-        _copy_original_object(module, 'top_level_var')
-        self.assertEqual(module.top_level_var, 'original value')
-    
-    def testKeepTopLevelMock(self):
-        another_var_mock = Mock(name='another mocked value')
-        class module:
-            top_level_var = Mock(name='mocked value')
-            another_var = another_var_mock
-            __mocked_module_dict__ = {'top_level_var': 'original value'}
-        _copy_original_object(module, 'top_level_var')
-        self.assertEqual(module.another_var, another_var_mock)
-    
-    def testCopySecondLevelVar(self):
-        class top_level_var_value:
-            second_level_var = 'original value'
-        class module:
-            top_level_var = Mock(name='top_level_var')
-            __mocked_module_dict__ = {'top_level_var': top_level_var_value}
-        _copy_original_object(module, 'top_level_var.second_level_var')
-        self.assertTrue(isinstance(module.top_level_var, Mock))
-        self.assertEqual(module.top_level_var.second_level_var, 'original value')
-    
-    def testKeepSecondLevelMock(self):
-        class top_level_var_value:
-            second_level_var = 'original value'
-            another_var = Mock(name='another mocked value')
-        class module:
-            top_level_var = Mock(name='top_level_var')
-            __mocked_module_dict__ = {'top_level_var': top_level_var_value}
-        _copy_original_object(module, 'top_level_var.second_level_var')
-        self.assertTrue(isinstance(module.top_level_var.another_var, Mock))
-
-    def testcreate_mock_classFakeConstructorCopiesMethods(self):
-        from mock_isolation import create_mock_class
-        class _MyClass(object):
-            def my_method(self): pass
-        class module:
-            MyClass = create_mock_class('MyClass', (Mock,), {})
-            __mocked_module_dict__ = {'MyClass': _MyClass}
-        _copy_original_object(module, 'MyClass.my_method')
-        self.assertEqual(module.MyClass.my_method.im_func,
-                         _MyClass.my_method.im_func)
-        #self.assertEqual(module.MyClass().my_method.im_func,
-        #                 _MyClass.my_method.im_func)
-
-
 class PatchModuleContextManagerTest(unittest2.TestCase):
     def testPatchEverythingInModule(self):
         import UserList
         with isolate(UserList):
-            self.assertTrue(isinstance(UserList.UserList, Mock))
+            self.assertTrue(isinstance(UserList.UserList.append, Mock))
 
     def testRestoreEverythingInModule(self):
         import UserList
@@ -97,7 +43,7 @@ class PatchModuleContextManagerTest(unittest2.TestCase):
     def testExcludeInstanceMethod(self):
         class MyClass(object):
             def my_method(self):
-                return self
+                return 'return value of my_method'
         class mymodule:
             my_instance = MyClass()
         original_method = mymodule.my_instance.my_method
@@ -105,7 +51,8 @@ class PatchModuleContextManagerTest(unittest2.TestCase):
         with isolate(mymodule, 'my_instance.my_method'):
             self.assertTrue(isinstance(mymodule.my_instance, Mock))
             self.assertNotEqual(mymodule.my_instance.my_method, original_method)
-            self.assertEqual(mymodule.my_instance.my_method(), mymodule.my_instance)
+            self.assertEqual(mymodule.my_instance.my_method(),
+                             'return value of my_method')
 
     def testExcludeInstanceMethodInClass(self):
         mod = tests.isolationfixture
@@ -144,29 +91,31 @@ class PatchModuleContextManagerTest(unittest2.TestCase):
 
     def testConstructorIsolation(self):
         """Isolated __init__() is called correctly"""
-        with isolate(tests.isolationfixture,
-                     'MyClass.__init__'):
+        original_cls = tests.isolationfixture.MyClass
+        original_init = original_cls.__init__
+        with isolate(tests.isolationfixture, 'MyClass.__init__'):
             mod = tests.isolationfixture
+            self.assertNotEqual(mod.MyClass, original_cls)
+            self.assertEqual(mod.MyClass.__init__, original_init)
             self.assertFalse(isinstance(mod.MyClass.__init__, Mock))
             instance = mod.MyClass()
             self.assertEqual(instance.my_attribute,
-                             'value of Mock().my_attribute')
+                             'value of MyClass().my_attribute')
 
-    #def testConstructorWithSuper(self):
-    #    """super() is called correctly inside an isolated __init__()"""
-    #    with isolate(tests.isolationfixture,
-    #                 'ClassWithSuperInConstructor.__init__'):
-    #        mod = tests.isolationfixture
-    #        self.assertFalse(
-    #            isinstance(mod.ClassWithSuperInConstructor.__init__, Mock))
-    #        instance = mod.ClassWithSuperInConstructor()
-    #        self.assertEqual(super(mod.ClassWithSuperInConstructor, instance), 5)
-    #        self.assertEqual(
-    #            instance.my_attribute,
-    #            'value of ClassWithSuperInConstructor().my_attribute')
-    #        self.assertEqual(
-    #            instance.other_attribute,
-    #            'value of ClassWithSuperInConstructor().other_attribute')
+    def testConstructorWithSuper(self):
+        """super() is called correctly inside an isolated __init__()"""
+        with isolate(tests.isolationfixture,
+                     'ClassWithSuperInConstructor.__init__'):
+            mod = tests.isolationfixture
+            self.assertFalse(
+                isinstance(mod.ClassWithSuperInConstructor.__init__, Mock))
+            instance = mod.ClassWithSuperInConstructor()
+            self.assertEqual(
+                instance.my_attribute,
+                'value of ClassWithSuperInConstructor().my_attribute')
+            self.assertEqual(
+                instance.other_attribute,
+                'value of ClassWithSuperInConstructor().other_attribute')
 
 
 import UserList
@@ -175,7 +124,7 @@ OriginalUserList = UserList.UserList
 class PatchModuleDecorateCallableTest(unittest2.TestCase):
     @isolate(UserList)
     def testPatchEverythingInModule(self):
-        self.assertTrue(isinstance(UserList.UserList, Mock))
+        self.assertTrue(isinstance(UserList.UserList.append, Mock))
 
     def testRestoreEverythingInModule(self):
         import UserList
@@ -210,6 +159,8 @@ class PatchModuleDecorateCallableTest(unittest2.TestCase):
         def _testExcludeInstanceMethod():
             self.assertTrue(isinstance(mymodule.my_instance, Mock))
             self.assertNotEqual(mymodule.my_instance.my_method, original_method)
+            self.assertEqual(mymodule.my_instance.my_method.im_func,
+                             original_method.im_func)
             self.assertEqual(mymodule.my_instance.my_method(), mymodule.my_instance)
 
         _testExcludeInstanceMethod()
@@ -221,8 +172,11 @@ class PatchModuleDecorateCallableTest(unittest2.TestCase):
 class PatchModuleDecorateClassTest(unittest2.TestCase):
     def testPatchObjectsInModule(self):
         mod = tests.isolationfixture
-        self.assertTrue(isinstance(mod.MyClass, Mock))
-        self.assertTrue(isinstance(mod.ClassWithNestedInstances, Mock))
+        self.assertFalse(isinstance(mod.MyClass, Mock))
+        self.assertTrue('instance_method' in mod.MyClass.__dict__.keys())
+        self.assertTrue(isinstance(mod.MyClass.instance_method, Mock), mod.MyClass.instance_method)
+        self.assertTrue(isinstance(
+            mod.ClassWithNestedInstances.nested_class_attribute, Mock))
         self.assertTrue(isinstance(mod.my_instance, Mock))
         self.assertTrue(isinstance(mod.my_instance_with_nested_instances, Mock))
 
