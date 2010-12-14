@@ -24,6 +24,7 @@ __version__ = '0.1'
 def _clone_class(cls, exclude):
     clone_attrs = {}
     local_exclude = set(ex[0] for ex in exclude if ex)
+    local_exclude.add('__module__')
     for key, value in cls.__dict__.iteritems():
         if key == '__dict__':
             continue
