@@ -54,7 +54,7 @@ try:
 except ImportError:
     from distutils.core import setup
 else:
-    params['tests_require'] = ['unittest2']
+    params['tests_require'] = ['unittest2', 'mock']
     params['test_suite'] = 'unittest2.collector'
 
 setup(**params)
