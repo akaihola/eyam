@@ -18,7 +18,6 @@ from types import MethodType
 
 
 __all__ = 'isolate',
-__version__ = '0.1'
 
 
 def _clone_class(cls, exclude):

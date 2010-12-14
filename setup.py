@@ -3,8 +3,6 @@
 # Copyright (C) 2010 Antti Kaihola
 # E-mail: akaihol PLUS python AT ambitone DOT com
 
-from eyam import __version__
-
 import os
 
 
@@ -38,7 +36,7 @@ KEYWORDS = ("testing test mock mocking unittest patching "
 
 params = dict(
     name=NAME,
-    version=__version__,
+    version='0.1',
     py_modules=MODULES,
 
     # metadata for upload to PyPI
