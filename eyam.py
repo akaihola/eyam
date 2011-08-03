@@ -13,7 +13,11 @@
 
 
 from inspect import getmodule, ismethod, isclass
-from mock import _importer, class_types, DEFAULT, Mock, wraps
+from mock import _importer, DEFAULT, Mock, wraps
+try:
+    from mock import class_types  # mock <0.8
+except:
+    from mock import ClassTypes as class_types  # mock >=0.8
 from types import MethodType
 
 
